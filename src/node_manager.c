@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "node_manager.h"
+
+static Node *node_list_head = NULL;
+static pthread_mutex_t table_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void init_node_manager() {
+    pthread_mutex_init(&table_mutex, NULL);
+}
+
+void update_node(uint32_t id, uint16_t ldr, uint8_t pir, NodeRole role) {
+    pthread_mutex_lock(&table_mutex);
+
+    Node *curr = node_list_head;
+    while (curr) {
+        if (curr->node_id == id) {
+            // 找到已知节点，更新数据
+            curr->last_ldr = ldr;
+            curr->last_pir = pir;
+            curr->role = role;
+            curr->last_seen = time(NULL);
+            pthread_mutex_unlock(&table_mutex);
+            return;
+        }
+        curr = curr->next;
+    }
+
+    // 未找到节点，新建并插入链表头部
+    Node *new_node = (Node *)malloc(sizeof(Node));
+    new_node->node_id = id;
+    new_node->last_ldr = ldr;
+    new_node->last_pir = pir;
+    new_node->role = role;
+    new_node->last_seen = time(NULL);
+    new_node->next = node_list_head;
+    node_list_head = new_node;
+
+    printf("[NodeMgr] New node detected: 0x%X\n", id);
+    pthread_mutex_unlock(&table_mutex);
+}
+
+void check_node_timeouts(int timeout_sec) {
+    pthread_mutex_lock(&table_mutex);
+    
+    time_t now = time(NULL);
+    Node **curr = &node_list_head;
+
+    while (*curr) {
+        Node *entry = *curr;
+        if (now - entry->last_seen > timeout_sec) {
+            // 超时，从链表中移除
+            printf("[NodeMgr] Node 0x%X timed out, removing...\n", entry->node_id);
+            *curr = entry->next;
+            free(entry);
+        } else {
+            curr = &entry->next;
+        }
+    }
+
+    pthread_mutex_unlock(&table_mutex);
+}
+
+void dump_node_table() {
+    pthread_mutex_lock(&table_mutex);
+    printf("\n--- Active Nodes ---\n");
+    Node *curr = node_list_head;
+    while (curr) {
+        printf("ID: 0x%X | Role: %s | LDR: %d | PIR: %d\n", 
+               curr->node_id, 
+               (curr->role == ROLE_MASTER ? "MASTER" : "FOLLOWER"),
+               curr->last_ldr, curr->last_pir);
+        curr = curr->next;
+    }
+    printf("--------------------\n");
+    pthread_mutex_unlock(&table_mutex);
+}

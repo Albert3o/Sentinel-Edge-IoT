@@ -1,0 +1,21 @@
+# --- RPi C Build Artifacts ---
+bin/
+obj/
+*.o
+*.log
+
+# --- ESP32 / Arduino Artifacts ---
+.vscode/
+build/
+.pio/
+*.hex
+*.bin
+
+# --- Secrets ---
+include/secrets.conf
+*.pem
+*.key
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
