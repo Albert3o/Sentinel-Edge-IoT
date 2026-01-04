@@ -9,6 +9,13 @@ void init_node_manager() {
     pthread_mutex_init(&table_mutex, NULL);
 }
 
+
+/*
+当 gateway_core 的 epoll 收到一个 UDP 包时：
+查表：遍历链表，看 node_id 是否已存在。
+更新：如果存在，就把最新的 LDR、PIR 数值填进去，并刷新 last_seen 为当前系统时间。
+新增：如果不存在，说明是个新节点，立刻 malloc 内存创建一个新节点插进表头。
+*/
 void update_node(uint32_t id, uint16_t ldr, uint8_t pir, NodeRole role) {
     pthread_mutex_lock(&table_mutex);
 
@@ -26,7 +33,7 @@ void update_node(uint32_t id, uint16_t ldr, uint8_t pir, NodeRole role) {
         curr = curr->next;
     }
 
-    // 未找到节点，新建并插入链表头部
+    // 未找到节点，新建并插入链表头部（头插法）
     Node *new_node = (Node *)malloc(sizeof(Node));
     new_node->node_id = id;
     new_node->last_ldr = ldr;
@@ -40,6 +47,9 @@ void update_node(uint32_t id, uint16_t ldr, uint8_t pir, NodeRole role) {
     pthread_mutex_unlock(&table_mutex);
 }
 
+/*
+遍历结点链表，检查是否有超时结点。若有，就从结点链表删除
+*/
 void check_node_timeouts(int timeout_sec) {
     pthread_mutex_lock(&table_mutex);
     
@@ -57,9 +67,10 @@ void check_node_timeouts(int timeout_sec) {
             curr = &entry->next;
         }
     }
-
+  
     pthread_mutex_unlock(&table_mutex);
 }
+
 
 void dump_node_table() {
     pthread_mutex_lock(&table_mutex);

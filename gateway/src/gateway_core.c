@@ -14,7 +14,7 @@
 #include "node_manager.h"
 
 
-int ser_nonblocking(int fd){
+int set_nonblocking(int fd){
     int flag = fcntl(fd, F_GETFL, 0);
     if(flag == -1){
         exit(EXIT_FAILURE);
@@ -95,6 +95,9 @@ int init_gateway(GatewayServer *server) {
     return 0;
 }
 
+/*
+接收esp结点发过来的udp包，然后更新rpi的结点内存表。若是alert包，打印并上传firebase
+*/
 void handle_udp_packet(int fd) {
     IoTProtocolPacket packet;
     struct sockaddr_in client_addr;
@@ -109,6 +112,7 @@ void handle_udp_packet(int fd) {
         // 如果是异常包(PKT_ALERT)，可以在这里触发云端上传任务逻辑
         if (packet.pkt_type == PKT_ALERT) {
             printf("[ALERT] High severity event from Master 0x%X!\n", packet.node_id);
+            // TODO 云端上传逻辑
         }
     }
 }

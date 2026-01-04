@@ -1,0 +1,46 @@
+#include <cstdio>
+#include "sensor_manager.h"
+
+SensorManager::SensorManager() : _consecutive_pir_high(0) {
+    _currentData = {0, false, false};
+}
+
+void SensorManager::init() {
+    pinMode(PIN_PIR, INPUT);
+    pinMode(PIN_LED_STATUS, OUTPUT);
+    digitalWrite(PIN_LED_STATUS, LOW);
+    analogReadResolution(12); // ESP32 ADC 12位分辨率 (0-4095)
+}
+
+void SensorManager::update() {
+    // 1. 读取 LDR 模拟值
+    _currentData.ldr_value = analogRead(PIN_LDR);
+
+    // 2. 读取 PIR 并进行软件去抖 (PRD V2.1 需求)
+    bool raw_pir = digitalRead(PIN_PIR);
+    if (raw_pir) {
+        _consecutive_pir_high++;
+    } else {
+        _consecutive_pir_high = 0;
+    }
+
+    // 记录旧状态用于对比
+    bool old_motion = _currentData.is_motion_detected;
+    // 异常判断
+    if (_consecutive_pir_high >= PIR_DEBOUNCE_COUNT) {
+        _currentData.is_motion_detected = true;
+    } else {
+        _currentData.is_motion_detected = false;
+    }
+
+    // 在状态改变或间隔一段时间时打印
+    if (old_motion != _currentData.is_motion_detected) {
+        Serial.printf("[Sensor] Motion: %s | LDR: %u\n", 
+                      _currentData.is_motion_detected ? "True" : "False", 
+                      _currentData.ldr_value);
+    }
+}
+
+SensorData SensorManager::getData() {
+    return _currentData;
+}
