@@ -14,12 +14,13 @@ typedef struct Task {
 // 线程池结构体
 typedef struct {
     pthread_mutex_t lock;
-    pthread_cond_t  notify;
-    pthread_t      *threads;
-    Task           *queue_head;
-    int             thread_count;
-    int             queue_size;
-    bool            shutdown;
+    pthread_cond_t notify;
+    pthread_t *threads;
+    Task *queue_head;
+    Task *queue_tail;
+    int thread_count;
+    int queue_size;
+    bool shutdown;
 } WorkerPool;
 
 // 全职线程池接口

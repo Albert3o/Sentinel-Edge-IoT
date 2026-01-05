@@ -63,18 +63,22 @@ void NetworkTask(void * pvParameters) {
     IoTProtocolPacket rxPacket;
     while(1) {
         if (netMgr.receivePacket(&rxPacket)) {
-            // 收到包后，通过锁保护并更新选举信息
             if (xSemaphoreTake(xTableMutex, pdMS_TO_TICKS(10))) {
-                if (rxPacket.node_id != netMgr.getNodeId()) { // 过滤自己的广播消息
-                    electMgr.updatePeerInfo(rxPacket.node_id, rxPacket.ldr_value, (NodeRole)rxPacket.node_role, rxPacket.pir_state);
-                } else if (rxPacket.pkt_type == PKT_ACK) {
-                    // 处理来自网关的确认，记录网关 IP
-                    netMgr.setGatewayIP(netMgr.getGatewayIP());
+                
+                // 优先处理网关确认包（由于网关 ID 固定，直接根据类型判断）
+                if (rxPacket.pkt_type == PKT_ACK) {
+                    netMgr.setGatewayIP(netMgr.getGatewayIP()); 
+                    // printf("Gateway Found at: %s\n", netMgr.getGatewayIP().toString().c_str());
+                } 
+                // 其次处理其他节点发来的选举信息包
+                else if (rxPacket.node_id != netMgr.getNodeId()) {
+                    electMgr.updatePeerInfo(rxPacket.node_id, rxPacket.ldr_value, 
+                                          (NodeRole)rxPacket.node_role, rxPacket.pir_state);
                 }
+                
                 xSemaphoreGive(xTableMutex);
             }
         }
-        // 给 RTOS 调度器让出时间
         vTaskDelay(pdMS_TO_TICKS(1)); 
     }
 }
@@ -103,10 +107,24 @@ void LogicTask(void * pvParameters) {
 
             // 4. LED 可视化逻辑
             updateLED(myRole, sData.is_anomalous);
+
+            // 调试
+            if (myRole == ROLE_MASTER) {
+            // 如果是 Master，每秒打印一下当前传感器的状态，看看异常判定是否生效
+            Serial.printf("[DEBUG] Master Active | LDR: %u | Motion: %d | Anomalous: %d\n", 
+                          sData.ldr_value, sData.is_motion_detected, sData.is_anomalous);
+    
+            if (sData.is_anomalous) {
+                Serial.println("[DEBUG] !!! TRYING TO SEND ALERT !!!");
+                netMgr.sendAlertToGateway(sData.ldr_value, sData.is_motion_detected, 2);
+            }
+            }
         }
 
         // 精确控制周期
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
+        
     }
 }
 

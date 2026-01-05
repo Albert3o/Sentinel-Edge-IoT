@@ -4,10 +4,10 @@ CFLAGS = -Iinclude -Wall -Wextra -g -O2
 LDFLAGS = -lcurl -pthread -lrt
 
 # 目录定义
-SRC_DIR = gateway/src
-INC_DIR = gateway/include
-OBJ_DIR = gateway/obj
-BIN_DIR = gateway/bin
+SRC_DIR = src
+INC_DIR = include
+OBJ_DIR = obj
+BIN_DIR = bin
 
 # 自动获取所有的源文件和目标文件
 SOURCES = $(wildcard $(SRC_DIR)/*.c)

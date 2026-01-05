@@ -39,7 +39,17 @@ void SensorManager::update() {
                       _currentData.is_motion_detected ? "True" : "False", 
                       _currentData.ldr_value);
     }
+
+    // 判定异常逻辑：有移动 且 亮度超过设定的“黑暗环境”上限（即有人在黑暗中开了灯）
+    // 注意：这里用 > 还是 < 取决于你 LDR 的电路接法，通常是光越亮数值越大
+    if (_currentData.is_motion_detected && _currentData.ldr_value > LDR_THRESHOLD_DARK) {
+        _currentData.is_anomalous = true;
+    } else {
+        _currentData.is_anomalous = false;
+    }
 }
+
+
 
 SensorData SensorManager::getData() {
     return _currentData;

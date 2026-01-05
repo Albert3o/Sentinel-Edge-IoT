@@ -13,7 +13,7 @@ void ElectionManager::init(uint32_t myId) {
 
 
 void ElectionManager::updatePeerInfo(uint32_t peerId, uint16_t peerLdr, NodeRole peerRole, uint8_t pir_state) {
-    // 记录只要有声音的时间，用于判断网络是否断开
+    // 记录检测到运动的时间，用于判断网络是否断开
     _lastPeerSeenTime = millis(); 
 
     if (pir_state) {

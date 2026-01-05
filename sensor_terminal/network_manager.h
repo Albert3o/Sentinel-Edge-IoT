@@ -9,7 +9,7 @@
 
 // 对应需求中的端口号
 #define UDP_PORT_BROADCAST 8888
-#define UDP_PORT_GATEWAY   8889
+#define UDP_PORT_GATEWAY   8888
 
 class MyNetworkManager {
 public:
