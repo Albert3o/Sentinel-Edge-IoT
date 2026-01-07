@@ -36,4 +36,7 @@ void check_node_timeouts(int timeout_sec);
 // 打印当前所有在线节点（调试用）
 void dump_node_table();
 
+// 检查并更新上传时间戳（原子操作）
+int try_node_alert_upload(uint32_t id, int interval_sec);
+
 #endif

@@ -1,0 +1,54 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <curl/curl.h>
+#include "cJSON.h"
+#include "cloud_client.h"
+
+void cloud_client_init() {
+    curl_global_init(CURL_GLOBAL_ALL);
+}
+
+void cloud_client_cleanup() {
+    curl_global_cleanup();
+}
+
+void upload_alert_task(void *arg) {
+    AlertTaskArgs *data = (AlertTaskArgs *)arg;
+    CURL *curl = curl_easy_init();
+    
+    if (curl) {
+        // 1. 构造 JSON
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddNumberToObject(root, "node_id", data->node_id);
+        cJSON_AddNumberToObject(root, "ldr", data->ldr_value);
+        cJSON_AddNumberToObject(root, "severity", data->severity);
+        cJSON_AddNumberToObject(root, "timestamp", (long)time(NULL));
+        char *json_str = cJSON_PrintUnformatted(root);
+
+        // 2. 配置 Curl
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+
+        curl_easy_setopt(curl, CURLOPT_URL, FIREBASE_URL);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L); // 5秒超时
+
+        // 3. 发送请求
+        CURLcode res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "[Cloud] Upload failed: %s\n", curl_easy_strerror(res));
+        } else {
+            printf("[Cloud] Alert from 0x%X pushed to Firebase.\n", data->node_id);
+        }
+
+        // 4. 清理
+        cJSON_Delete(root);
+        free(json_str);
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+    // 释放由调用者分配的参数内存
+    free(data);
+}

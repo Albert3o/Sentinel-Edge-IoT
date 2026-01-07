@@ -86,3 +86,27 @@ void dump_node_table() {
     printf("--------------------\n");
     pthread_mutex_unlock(&table_mutex);
 }
+
+
+// 检查并更新上传时间戳（原子操作）
+// 返回 1 表示允许上传，返回 0 表示被限流
+int try_node_alert_upload(uint32_t id, int interval_sec) {
+    pthread_mutex_lock(&table_mutex);
+    Node *curr = node_list_head;
+    time_t now = time(NULL);
+
+    while (curr) {
+        if (curr->node_id == id) {
+            if (now - curr->last_cloud_upload >= interval_sec) {
+                curr->last_cloud_upload = now; // 在锁内直接更新
+                pthread_mutex_unlock(&table_mutex);
+                return 1; 
+            }
+            pthread_mutex_unlock(&table_mutex);
+            return 0; // 被限流
+        }
+        curr = curr->next;
+    }
+    pthread_mutex_unlock(&table_mutex);
+    return 0; // 未找到节点
+}

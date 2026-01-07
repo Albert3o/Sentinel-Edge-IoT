@@ -96,40 +96,46 @@ int init_gateway(GatewayServer *server) {
 }
 
 /*
-接收esp结点发过来的udp包，然后更新rpi的结点内存表。若是alert包，打印并上传firebase
+接收esp结点发过来的udp包，然后更新rpi的结点内存表。若是alert包，丢给线程池处理，本地打印并上传firebase
 */
 void handle_udp_packet(int fd) {
     IoTProtocolPacket packet;
     struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
 
-    // 1. 接收包并获取发送者地址
     ssize_t len = recvfrom(fd, &packet, sizeof(packet), 0, (struct sockaddr *)&client_addr, &addr_len);
     
     if (len == sizeof(IoTProtocolPacket) && packet.version == FIRST_VERSION) {
-        // 2. 更新节点表
+        // 更新节点表（内部带锁）
         update_node(packet.node_id, packet.ldr_value, packet.pir_state, (NodeRole)packet.node_role);
         
-        // 3. 核心改进：发送 ACK 包回传给 ESP32
-        // 这样 ESP32 就能通过 recvfrom 知道 RPi 的 IP 了
-        if(packet.pkt_type == PKT_HEARTBEAT){
-            IoTProtocolPacket ack_pkt;
-            memset(&ack_pkt, 0, sizeof(ack_pkt));
-            ack_pkt.version = FIRST_VERSION;
-            ack_pkt.pkt_type = PKT_ACK; // 告诉 ESP32：我是网关，我收到你的消息了
-            ack_pkt.node_id = 0xFFFFFFFF; // 网关的特殊 ID
-
+        // 发现心跳包，回 ACK 让 ESP32 记录网关 IP
+        if (packet.pkt_type == PKT_HEARTBEAT) {
+            IoTProtocolPacket ack_pkt = { .version = FIRST_VERSION, .pkt_type = PKT_ACK, .node_id = 0xFFFFFFFF };
             sendto(fd, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr *)&client_addr, addr_len);
         }
-        
-        // 4. 处理报警
+
+        // 处理报警包
         if (packet.pkt_type == PKT_ALERT) {
-            printf("[ALERT] High severity event from Master 0x%X!\n", packet.node_id);
-            // TODO这里可以丢进线程池,然后进行上传云端处理
-            
+            // 【核心修正】：原子化判断是否允许上传（30秒限流）
+            // 内部直接判断并更新时间戳，返回 1 说明通过校验
+            if (try_node_alert_upload(packet.node_id, 30)) {
+                printf("[ALERT] Intruson! Dispatching cloud task for 0x%X\n", packet.node_id);
+                
+                AlertTaskArgs *args = malloc(sizeof(AlertTaskArgs));
+                args->node_id = packet.node_id;
+                args->ldr_value = packet.ldr_value;
+                args->severity = packet.severity;
+
+                // 丢进线程池，不阻塞 UDP 接收
+                worker_pool_add_task(upload_alert_task, (void *)args);
+            } else {
+                printf("[Local Log] 0x%X triggered alert (throttled)\n", packet.node_id);
+            }
         }
     }
 }
+
 
 void handle_timer_tick(int fd) {
     uint64_t expirations;
