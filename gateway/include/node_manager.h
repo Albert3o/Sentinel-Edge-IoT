@@ -20,7 +20,8 @@ typedef struct Node {
     uint16_t last_ldr;      // 最新状态：我那里的光照强度是多少？ 
     uint8_t  last_pir;      // 最新状态：我那里现在有人在动吗？
     NodeRole role;
-    time_t   last_seen;     // 记录最后一次收到心跳的系统时间
+    time_t last_alert_time; // 用于报警限流
+    time_t last_seen;     // 记录最后一次收到心跳的系统时间,用于心跳/活跃检查
     struct Node *next;      // 单链表结构
 } Node;
 

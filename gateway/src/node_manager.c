@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "node_manager.h"
+#include "utils.h"
 
 static Node *node_list_head = NULL;
 static pthread_mutex_t table_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -26,7 +27,7 @@ void update_node(uint32_t id, uint16_t ldr, uint8_t pir, NodeRole role) {
             curr->last_ldr = ldr;
             curr->last_pir = pir;
             curr->role = role;
-            curr->last_seen = time(NULL);
+            curr->last_seen = time(NULL); // 表示刚刚还在
             pthread_mutex_unlock(&table_mutex);
             return;
         }
@@ -39,11 +40,11 @@ void update_node(uint32_t id, uint16_t ldr, uint8_t pir, NodeRole role) {
     new_node->last_ldr = ldr;
     new_node->last_pir = pir;
     new_node->role = role;
+    new_node->last_alert_time = 0; // 表示还没出现过
     new_node->last_seen = time(NULL);
     new_node->next = node_list_head;
     node_list_head = new_node;
-
-    printf("[NodeMgr] New node detected: 0x%X\n", id);
+    log_message(LOG_INFO, "[NodeMgr] New node detected: 0x%X", id);
     pthread_mutex_unlock(&table_mutex);
 }
 
@@ -60,7 +61,7 @@ void check_node_timeouts(int timeout_sec) {
         Node *entry = *curr;
         if (now - entry->last_seen > timeout_sec) {
             // 超时，从链表中移除
-            printf("[NodeMgr] Node 0x%X timed out, removing...\n", entry->node_id);
+            log_message(LOG_INFO, "[NodeMgr] Node 0x%X timed out, removing...", entry->node_id);
             *curr = entry->next;
             free(entry);
         } else {
@@ -74,16 +75,18 @@ void check_node_timeouts(int timeout_sec) {
 
 void dump_node_table() {
     pthread_mutex_lock(&table_mutex);
-    printf("\n--- Active Nodes ---\n");
+    log_message(LOG_INFO,  "\n--- [NodeMgr] Active Nodes ---");
     Node *curr = node_list_head;
     while (curr) {
-        printf("ID: 0x%X | Role: %s | LDR: %d | PIR: %d\n", 
+        log_message(LOG_INFO,  
+               "[NodeMgr] ID: 0x%X | Role: %s | LDR: %d | PIR: %d\n", 
                curr->node_id, 
                (curr->role == ROLE_MASTER ? "MASTER" : "FOLLOWER"),
                curr->last_ldr, curr->last_pir);
+        
         curr = curr->next;
     }
-    printf("--------------------\n");
+    log_message(LOG_INFO,  "--------------------");
     pthread_mutex_unlock(&table_mutex);
 }
 
@@ -91,14 +94,14 @@ void dump_node_table() {
 // 检查并更新上传时间戳（原子操作）
 // 返回 1 表示允许上传，返回 0 表示被限流
 int try_node_alert_upload(uint32_t id, int interval_sec) {
-    pthread_mutex_lock(&table_mutex);
+    pthread_mutex_lock(&table_mutex); 
     Node *curr = node_list_head;
     time_t now = time(NULL);
 
     while (curr) {
         if (curr->node_id == id) {
-            if (now - curr->last_cloud_upload >= interval_sec) {
-                curr->last_cloud_upload = now; // 在锁内直接更新
+            if (now - curr->last_alert_time >= interval_sec) {
+                curr->last_alert_time = now; // 在锁内直接更新
                 pthread_mutex_unlock(&table_mutex);
                 return 1; 
             }

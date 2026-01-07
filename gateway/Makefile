@@ -1,7 +1,7 @@
 # 编译器设置
 CC = gcc
-CFLAGS = -Iinclude -Wall -Wextra -g -O2
-LDFLAGS = -lcurl -pthread -lrt
+CFLAGS = -Iinclude -Wall -Wextra -g -O2 -Wno-unused-parameter # -Wno-unused-parameter 用来消除 sig, argc, argv 未使用的警告
+LDFLAGS = -lcurl -pthread -lcjson -lrt -lm
 
 # 目录定义
 SRC_DIR = src

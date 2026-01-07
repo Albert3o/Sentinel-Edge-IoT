@@ -4,8 +4,7 @@
 #include <stdint.h>
 
 // Firebase 配置
-#define FIREBASE_URL "https://sentineledgeiot-default-rtdb.firebaseio.com/alerts.json"
-
+#define FIREBASE_URL "https://sentineledgeiot-default-rtdb.firebaseio.com/alerts.json?auth=9lAkjK9moYXwj11RMuXwm1Ht6tZO6YeA87F6o7Uw"
 // 初始化 Cloud Client (如 curl 环境)
 void cloud_client_init();
 

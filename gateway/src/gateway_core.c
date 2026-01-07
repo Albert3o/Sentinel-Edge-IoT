@@ -7,11 +7,14 @@
 #include <sys/timerfd.h>
 #include <errno.h>
 #include <time.h>
-
+#include <syslog.h>
+#include <utils.h>
 #include "gateway_core.h"
 #include "protocol.h"
 #include "utils.h"
 #include "node_manager.h"
+#include "worker_pool.h"
+#include "cloud_client.h"
 
 
 int set_nonblocking(int fd){
@@ -26,7 +29,7 @@ int init_gateway(GatewayServer *server) {
     // 1. 创建 UDP Socket
     server->udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (server->udp_fd < 0) {
-        perror("Socket creation failed");
+        log_error("[Gateway] Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
@@ -43,7 +46,7 @@ int init_gateway(GatewayServer *server) {
     server->server_addr.sin_port = htons(LISTEN_PORT);
 
     if (bind(server->udp_fd, (struct sockaddr *)&server->server_addr, sizeof(server->server_addr)) < 0) {
-        perror("Bind failed");
+        log_error("[Gateway] server bind failed");
         exit(EXIT_FAILURE);
     }
 
@@ -120,17 +123,26 @@ void handle_udp_packet(int fd) {
             // 【核心修正】：原子化判断是否允许上传（30秒限流）
             // 内部直接判断并更新时间戳，返回 1 说明通过校验
             if (try_node_alert_upload(packet.node_id, 30)) {
-                printf("[ALERT] Intruson! Dispatching cloud task for 0x%X\n", packet.node_id);
-                
+                log_message(LOG_ALERT, "[Gateway][ALERT] Intruson! Dispatching cloud task for 0x%X", packet.node_id);
                 AlertTaskArgs *args = malloc(sizeof(AlertTaskArgs));
-                args->node_id = packet.node_id;
-                args->ldr_value = packet.ldr_value;
-                args->severity = packet.severity;
+            if (!args) {
+                log_error("[Gateway] Critical: Failed to allocate AlertTaskArgs");
+                return; // 结束函数，跳过本次任务
+            }
 
+            *args = (AlertTaskArgs){
+                .node_id = packet.node_id, 
+                .ldr_value = packet.ldr_value, 
+                .severity = packet.severity
+            };
                 // 丢进线程池，不阻塞 UDP 接收
-                worker_pool_add_task(upload_alert_task, (void *)args);
+                if (worker_pool_add_task(upload_alert_task, (void *)args) != 0) {
+                    log_message(LOG_WARNING, "[Gateway] Worker pool full, dropping alert task for 0x%X", packet.node_id);
+                    free(args);
+                }
             } else {
-                printf("[Local Log] 0x%X triggered alert (throttled)\n", packet.node_id);
+                // TODO 日志处理，统计而非打印
+                // syslog(LOG_DEBUG, "Node 0x%X alert throttled.", packet.node_id);
             }
         }
     }
@@ -153,8 +165,7 @@ void handle_timer_tick(int fd) {
 
 void run_gateway_loop(GatewayServer *server) {
     struct epoll_event events[MAX_EVENTS];
-    printf("Gateway Gateway listening on port %d...\n", LISTEN_PORT);
-
+    log_message(LOG_INFO, "[Gateway] Gateway listening on port %d...\n", LISTEN_PORT);
     while (1) {
         int nfds = epoll_wait(server->epoll_fd, events, MAX_EVENTS, -1);
         for (int i = 0; i < nfds; i++) {
