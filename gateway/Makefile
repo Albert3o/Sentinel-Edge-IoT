@@ -1,7 +1,7 @@
 # 编译器设置
 CC = gcc
-CFLAGS = -Iinclude -Wall -Wextra -g -O2
-LDFLAGS = -lcurl -pthread -lrt
+CFLAGS = -Iinclude -Wall -Wextra -g -O2 -Wno-unused-parameter # -Wno-unused-parameter 用来消除 sig, argc, argv 未使用的警告
+LDFLAGS = -lcurl -pthread -lcjson -lrt -lm
 
 # 目录定义
 SRC_DIR = src
@@ -12,7 +12,7 @@ BIN_DIR = bin
 # 自动获取所有的源文件和目标文件
 SOURCES = $(wildcard $(SRC_DIR)/*.c)
 OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
-TARGET = $(BIN_DIR)/iot_gateway
+TARGET = $(BIN_DIR)/sentinel_edge_iot
 
 # 默认规则
 all: directories $(TARGET)

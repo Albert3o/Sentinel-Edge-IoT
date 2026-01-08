@@ -7,14 +7,17 @@
 #include <sys/timerfd.h>
 #include <errno.h>
 #include <time.h>
-
+#include <syslog.h>
+#include <utils.h>
 #include "gateway_core.h"
 #include "protocol.h"
 #include "utils.h"
 #include "node_manager.h"
+#include "worker_pool.h"
+#include "cloud_client.h"
 
 
-int ser_nonblocking(int fd){
+int set_nonblocking(int fd){
     int flag = fcntl(fd, F_GETFL, 0);
     if(flag == -1){
         exit(EXIT_FAILURE);
@@ -26,7 +29,7 @@ int init_gateway(GatewayServer *server) {
     // 1. 创建 UDP Socket
     server->udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (server->udp_fd < 0) {
-        perror("Socket creation failed");
+        log_error("[Gateway] Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
@@ -43,7 +46,7 @@ int init_gateway(GatewayServer *server) {
     server->server_addr.sin_port = htons(LISTEN_PORT);
 
     if (bind(server->udp_fd, (struct sockaddr *)&server->server_addr, sizeof(server->server_addr)) < 0) {
-        perror("Bind failed");
+        log_error("[Gateway] server bind failed");
         exit(EXIT_FAILURE);
     }
 
@@ -95,6 +98,9 @@ int init_gateway(GatewayServer *server) {
     return 0;
 }
 
+/*
+接收esp结点发过来的udp包，然后更新rpi的结点内存表。若是alert包，丢给线程池处理，本地打印并上传firebase
+*/
 void handle_udp_packet(int fd) {
     IoTProtocolPacket packet;
     struct sockaddr_in client_addr;
@@ -103,34 +109,61 @@ void handle_udp_packet(int fd) {
     ssize_t len = recvfrom(fd, &packet, sizeof(packet), 0, (struct sockaddr *)&client_addr, &addr_len);
     
     if (len == sizeof(IoTProtocolPacket) && packet.version == FIRST_VERSION) {
-        // 调用 node_manager 更新内存表
+        // 更新节点表（内部带锁）
         update_node(packet.node_id, packet.ldr_value, packet.pir_state, (NodeRole)packet.node_role);
         
-        // 如果是异常包(PKT_ALERT)，可以在这里触发云端上传任务逻辑
-        if (packet.pkt_type == PKT_ALERT) {
-            printf("[ALERT] High severity event from Master 0x%X!\n", packet.node_id);
+        // 发现心跳包，回 ACK 让 ESP32 记录网关 IP
+        if (packet.pkt_type == PKT_HEARTBEAT) {
+            IoTProtocolPacket ack_pkt = { .version = FIRST_VERSION, .pkt_type = PKT_ACK, .node_id = 0xFFFFFFFF };
+            sendto(fd, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr *)&client_addr, addr_len);
+        }
+
+        // 处理报警包
+        if (packet.severity >= WARNING) {
+            // 原子化判断是否允许上传（10秒限流）
+            if (try_node_alert_upload(packet.node_id, 10)) {
+                log_message(LOG_ALERT, "[Gateway] [Intruson Detected] Dispatching cloud task for 0x%X", packet.node_id);
+                AlertTaskArgs *args = malloc(sizeof(AlertTaskArgs));
+            if (!args) {
+                log_error("[Gateway] Critical: Failed to allocate AlertTaskArgs");
+                return;
+            }
+
+            *args = (AlertTaskArgs){
+                .node_id = packet.node_id, 
+                .ldr_value = packet.ldr_value, 
+                .severity = packet.severity
+            };
+                // 丢进线程池，不阻塞 UDP 接收
+                if (worker_pool_add_task(upload_alert_task, (void *)args) != 0) {
+                    log_message(LOG_WARNING, "[Gateway] Worker pool full, dropping alert task for 0x%X", packet.node_id);
+                    free(args);
+                }
+            } else {
+                // TODO 日志处理，统计而非打印
+            }
         }
     }
 }
+
 
 void handle_timer_tick(int fd) {
     uint64_t expirations;
     read(fd, &expirations, sizeof(expirations)); // 必须读取，否则 epoll 会持续触发
     
-    // 检查 5 秒未报到的节点（PRD 需求）
+    // 检查 5 秒未报到的节点，并将其从结点链表中删除
     check_node_timeouts(5);
     
-    // 每 5 秒打印一次节点表（可选，调试用）
+    // 每 3 秒打印一次节点表（可选，调试用）
     static int counter = 0;
-    if (++counter % 5 == 0) {
+    if (++counter % 3 == 0) {
         dump_node_table();
     }
 }
 
 void run_gateway_loop(GatewayServer *server) {
     struct epoll_event events[MAX_EVENTS];
-    printf("Gateway Gateway listening on port %d...\n", LISTEN_PORT);
-
+    log_message(LOG_INFO, "[Gateway] Gateway listening on port %d...\n", LISTEN_PORT);
     while (1) {
         int nfds = epoll_wait(server->epoll_fd, events, MAX_EVENTS, -1);
         for (int i = 0; i < nfds; i++) {
