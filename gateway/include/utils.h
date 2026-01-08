@@ -8,6 +8,11 @@
 #include <stdarg.h>
 
 extern int is_daemon;
+// 三个通知等级
+#define NORMAL 0
+#define WARNING 1
+#define ALERT 2
+
 
 // 通用日志打印
 void log_message(int priority, const char *format, ...);

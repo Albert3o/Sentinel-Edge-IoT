@@ -119,15 +119,14 @@ void handle_udp_packet(int fd) {
         }
 
         // 处理报警包
-        if (packet.pkt_type == PKT_ALERT) {
-            // 【核心修正】：原子化判断是否允许上传（30秒限流）
-            // 内部直接判断并更新时间戳，返回 1 说明通过校验
-            if (try_node_alert_upload(packet.node_id, 30)) {
-                log_message(LOG_ALERT, "[Gateway][ALERT] Intruson! Dispatching cloud task for 0x%X", packet.node_id);
+        if (packet.severity >= WARNING) {
+            // 原子化判断是否允许上传（10秒限流）
+            if (try_node_alert_upload(packet.node_id, 10)) {
+                log_message(LOG_ALERT, "[Gateway] [Intruson Detected] Dispatching cloud task for 0x%X", packet.node_id);
                 AlertTaskArgs *args = malloc(sizeof(AlertTaskArgs));
             if (!args) {
                 log_error("[Gateway] Critical: Failed to allocate AlertTaskArgs");
-                return; // 结束函数，跳过本次任务
+                return;
             }
 
             *args = (AlertTaskArgs){
@@ -142,7 +141,6 @@ void handle_udp_packet(int fd) {
                 }
             } else {
                 // TODO 日志处理，统计而非打印
-                // syslog(LOG_DEBUG, "Node 0x%X alert throttled.", packet.node_id);
             }
         }
     }

@@ -15,4 +15,11 @@
 
 // 版本类型
 #define FIRST_VERSION 0x01
+
+// 三个通知等级
+#define NORMAL 0
+#define WARNING 1
+#define ALERT 2
+
+
 #endif

@@ -102,23 +102,11 @@ void LogicTask(void * pvParameters) {
             // 3. 网络发送行为
             netMgr.broadcastHeartbeat(myRole, sData.ldr_value, sData.is_motion_detected);
             if (myRole == ROLE_MASTER && sData.is_anomalous) {
-                netMgr.sendAlertToGateway(sData.ldr_value, sData.is_motion_detected, 2);
+                netMgr.sendAlertToGateway(sData.ldr_value, sData.is_motion_detected);
             }
 
             // 4. LED 可视化逻辑
             updateLED(myRole, sData.is_anomalous);
-
-            // 调试
-            if (myRole == ROLE_MASTER) {
-            // 如果是 Master，每秒打印一下当前传感器的状态，看看异常判定是否生效
-            Serial.printf("[DEBUG] Master Active | LDR: %u | Motion: %d | Anomalous: %d\n", 
-                          sData.ldr_value, sData.is_motion_detected, sData.is_anomalous);
-    
-            if (sData.is_anomalous) {
-                Serial.println("[DEBUG] !!! TRYING TO SEND ALERT !!!");
-                netMgr.sendAlertToGateway(sData.ldr_value, sData.is_motion_detected, 2);
-            }
-            }
         }
 
         // 精确控制周期

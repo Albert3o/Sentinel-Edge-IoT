@@ -20,7 +20,7 @@ public:
     void broadcastHeartbeat(NodeRole role, uint16_t ldr, uint8_t pir);
     
     // 向网关单播异常 (仅 Master 调用)
-    void sendAlertToGateway(uint16_t ldr, uint8_t pir, uint8_t severity);
+    void sendAlertToGateway(uint16_t ldr, uint8_t pir);
 
     // 读取其他节点udp广播消息
     bool receivePacket(IoTProtocolPacket* pkt);

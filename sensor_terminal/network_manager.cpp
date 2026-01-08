@@ -74,14 +74,18 @@ void MyNetworkManager::broadcastHeartbeat(NodeRole role, uint16_t ldr, uint8_t p
     pkt.uptime_ms = millis();
     pkt.ldr_value = ldr;
     pkt.pir_state = pir;
-    pkt.severity = 0; // 心跳默认为 Normal
+    if ((pir * 2000 + ldr) > (LDR_THRESHOLD_DARK + 2000)) {
+        pkt.severity = WARNING; // is_anomlous ---> severity=1
+    }else {
+        pkt.severity = NORMAL;
+    }
     // 发送udp数据报
     _udp.beginPacket(_broadcastAddr, UDP_PORT_BROADCAST);
     _udp.write((uint8_t*)&pkt, sizeof(pkt));
     _udp.endPacket();
 }
 
-void MyNetworkManager::sendAlertToGateway(uint16_t ldr, uint8_t pir, uint8_t severity) {
+void MyNetworkManager::sendAlertToGateway(uint16_t ldr, uint8_t pir) {
     // 此时先向广播地址发送 Alert，直到后续实现“网关发现”逻辑后改为 _gatewayAddr
     IoTProtocolPacket pkt;
     pkt.version = FIRST_VERSION;
@@ -91,7 +95,7 @@ void MyNetworkManager::sendAlertToGateway(uint16_t ldr, uint8_t pir, uint8_t sev
     pkt.uptime_ms = millis();
     pkt.ldr_value = ldr;
     pkt.pir_state = pir;
-    pkt.severity = severity;
+    pkt.severity = ALERT;
     // 检测是否有rpi地址了
     IPAddress targetIP;
     if (_hasFoundGateway) {

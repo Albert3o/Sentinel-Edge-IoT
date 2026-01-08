@@ -5,6 +5,7 @@
 #include <cjson/cJSON.h>
 #include "cloud_client.h"
 #include "utils.h"
+#include "time.h"
 
 void cloud_client_init() {
     curl_global_init(CURL_GLOBAL_ALL);
@@ -19,15 +20,23 @@ void upload_alert_task(void *arg) {
     CURL *curl = curl_easy_init();
     
     if (curl) {
-        // // 由于node_id是uint32_t，将其转换成字符串避免出错
-        // char id_hex[16];
-        // sprintf(id_hex, "0x%X", data->node_id);
+        // 由于node_id是uint32_t，将其转换成字符串避免出错
+        char id_hex[16];
+        sprintf(id_hex, "0x%X", data->node_id);
+        // 转换时间戳为年月日 时分秒格式
+        time_t now = time(NULL);
+        struct tm tm_info;
+        char time_buf[26]; // 足够容纳 "2023-10-27 10:00:00"
+        // 使用线程安全版本的 localtime_r (在线程池环境中非常重要)
+        localtime_r(&now, &tm_info);
+        // 格式化为：年-月-日 时:分:秒
+        strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &tm_info);
         // 1. 构造 JSON
         cJSON *root = cJSON_CreateObject();
-        cJSON_AddNumberToObject(root, "node_id", data->node_id);
+        cJSON_AddStringToObject(root, "node_id", id_hex);
         cJSON_AddNumberToObject(root, "ldr", data->ldr_value);
         cJSON_AddNumberToObject(root, "severity", data->severity);
-        cJSON_AddNumberToObject(root, "timestamp", (long)time(NULL));
+        cJSON_AddStringToObject(root, "time", time_buf);
         char *json_str = cJSON_PrintUnformatted(root);
 
         // 2. 配置 Curl
