@@ -79,10 +79,12 @@ void dump_node_table() {
     Node *curr = node_list_head;
     while (curr) {
         log_message(LOG_INFO,  
-               "[NodeMgr] ID: 0x%X | Role: %s | LDR: %d | PIR: %d\n", 
+               "[NodeMgr] ID: 0x%X | Role: %s | LDR: %d | PIR: %d | Score: %d\n", 
                curr->node_id, 
                (curr->role == ROLE_MASTER ? "MASTER" : "FOLLOWER"),
-               curr->last_ldr, curr->last_pir);
+               curr->last_ldr, 
+               curr->last_pir,
+               curr->last_ldr+2000*curr->last_pir);
         
         curr = curr->next;
     }
