@@ -60,20 +60,20 @@ void loop() {
 
 // --- 任务 A：网络接收处理 (Core 0) ---
 void NetworkTask(void * pvParameters) {
-    IoTProtocolPacket rxPacket;
+    IoTProtocolPacket iotPacket;
     while(1) {
-        if (netMgr.receivePacket(&rxPacket)) {
+        if (netMgr.receivePacket(&iotPacket)) {
             if (xSemaphoreTake(xTableMutex, pdMS_TO_TICKS(10))) {
                 
                 // 优先处理网关确认包（由于网关 ID 固定，直接根据类型判断）
-                if (rxPacket.pkt_type == PKT_ACK) {
+                if (iotPacket.pkt_type == PKT_ACK) {
                     netMgr.setGatewayIP(netMgr.getGatewayIP()); 
                     // printf("Gateway Found at: %s\n", netMgr.getGatewayIP().toString().c_str());
                 } 
                 // 其次处理其他节点发来的选举信息包
-                else if (rxPacket.node_id != netMgr.getNodeId()) {
-                    electMgr.updatePeerInfo(rxPacket.node_id, rxPacket.ldr_value, 
-                                          (NodeRole)rxPacket.node_role, rxPacket.pir_state);
+                else if (iotPacket.node_id != netMgr.getNodeId()) {
+                    electMgr.updatePeerInfo(iotPacket.node_id, iotPacket.ldr_value, 
+                                          (NodeRole)iotPacket.node_role, iotPacket.pir_state);
                 }
                 
                 xSemaphoreGive(xTableMutex);

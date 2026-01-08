@@ -31,16 +31,16 @@ void MyNetworkManager::init(const char* ssid, const char* password) {
 
 
 bool MyNetworkManager::receivePacket(IoTProtocolPacket* pkt) {
-    // 1. 检查是否有数据包到达，并获取大小
+    // 检查是否有数据包到达，并获取大小
     int packetSize = _udp.parsePacket();
     
     if (packetSize > 0) {
-        // 2. 安全检查：确保收到的包大小符合我们的协议结构体
+        // 安全检查：确保收到的包大小符合我们的协议结构体
         if (packetSize == sizeof(IoTProtocolPacket)) {
-            // 3. 将 UDP 缓冲区的数据直接读取到指针指向的内存中
+            // 将 UDP 缓冲区的数据直接读取到指针指向的内存中
             _udp.read((uint8_t*)pkt, sizeof(IoTProtocolPacket));
             
-            // 4. 版本校验，确保协议匹配
+            // 版本校验，确保协议匹配
             if (pkt->version == FIRST_VERSION) {
                 return true; // 成功获取有效数据
             }

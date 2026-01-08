@@ -16,7 +16,7 @@ void SensorManager::update() {
     // 1. 读取 LDR 模拟值
     _currentData.ldr_value = analogRead(PIN_LDR);
 
-    // 2. 读取 PIR 并进行软件去抖
+    // 2. 读取 PIR 并进行软件去抖 (PRD V2.1 需求)
     bool raw_pir = digitalRead(PIN_PIR);
     if (raw_pir) {
         _consecutive_pir_high++;
@@ -41,6 +41,7 @@ void SensorManager::update() {
     }
 
     // 判定异常逻辑：有移动 且 亮度超过设定的“黑暗环境”上限（即有人在黑暗中开了灯）
+    // 注意：这里用 > 还是 < 取决于你 LDR 的电路接法，通常是光越亮数值越大
     if (_currentData.is_motion_detected && _currentData.ldr_value > LDR_THRESHOLD_DARK) {
         _currentData.is_anomalous = true;
     } else {
