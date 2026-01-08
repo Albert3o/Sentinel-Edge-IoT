@@ -19,6 +19,9 @@ void upload_alert_task(void *arg) {
     CURL *curl = curl_easy_init();
     
     if (curl) {
+        // // 由于node_id是uint32_t，将其转换成字符串避免出错
+        // char id_hex[16];
+        // sprintf(id_hex, "0x%X", data->node_id);
         // 1. 构造 JSON
         cJSON *root = cJSON_CreateObject();
         cJSON_AddNumberToObject(root, "node_id", data->node_id);
@@ -29,7 +32,7 @@ void upload_alert_task(void *arg) {
 
         // 2. 配置 Curl
         struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "[Cloud] Content-Type: application/json");
+        headers = curl_slist_append(headers, "Content-Type: application/json");
 
         curl_easy_setopt(curl, CURLOPT_URL, FIREBASE_URL);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str);
@@ -41,7 +44,7 @@ void upload_alert_task(void *arg) {
         if (res != CURLE_OK) {
             log_message(LOG_ERR, "[Cloud] Upload failed: %s", curl_easy_strerror(res));
         } else {
-            log_message(LOG_ALERT, "[Cloud] Alert from 0x%X pushed to Firebase.\n", data->node_id);
+            log_message(LOG_ALERT, "[Cloud] Alert from 0x%X pushed to Firebase.", data->node_id);
         }
 
         // 4. 清理
